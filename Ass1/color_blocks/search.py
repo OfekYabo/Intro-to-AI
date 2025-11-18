@@ -3,48 +3,81 @@ from color_blocks_state import color_blocks_state
 
 
 def create_open_set():
-    pass
+    # OPEN list for A* search
+    return []
 
 
 def create_closed_set():
-    pass
+    # CLOSED list for explored nodes
+    return []
 
 
 def add_to_open(vn, open_set):
-    pass
+    open_set.append(vn)
 
 
 def open_not_empty(open_set):
-    pass
+    return len(open_set) > 0
 
 
 def get_best(open_set):
-    pass
+    # Find node with minimal f (breaking ties using __lt__)
+    best_index = 0
+    for i in range(1, len(open_set)):
+        if open_set[i] < open_set[best_index]:
+            best_index = i
+    best_node = open_set[best_index]
+    open_set.pop(best_index)   # remove from OPEN
+    return best_node
 
 
 def add_to_closed(vn, closed_set):
-    pass
+    closed_set.append(vn)
 
-#returns False if curr_neighbor state not in open_set or has a lower g from the node in open_set
-#remove the node with the higher g from open_set (if exists)
+
 def duplicate_in_open(vn, open_set):
-    pass
+    """
+    Returns True if a duplicate with better or equal g exists in OPEN.
+    Returns False if:
+      - no duplicate exists, OR
+      - a duplicate exists but this path has lower g (in that case the old one is removed).
+    """
+    for i, node in enumerate(open_set):
+        if node.state == vn.state:
+            if vn.g < node.g:
+                open_set.pop(i)
+                return False  # new path is better
+            else:
+                return True   # existing path is better or equal
+    return False  # no duplicate
 
-#returns False if curr_neighbor state not in closed_set or has a lower g from the node in closed_set
-#remove the node with the higher g from closed_set (if exists)
+
 def duplicate_in_closed(vn, closed_set):
-    pass
+    """
+    Same logic as duplicate_in_open but for the CLOSED list.
+    If a better path is found, remove the old node.
+    """
+    for i, node in enumerate(closed_set):
+        if node.state == vn.state:
+            if vn.g < node.g:
+                closed_set.pop(i)
+                return False
+            else:
+                return True
+    return False
 
 
-# helps to debug sometimes..
 def print_path(path):
+    # Helpful to print the result path
     for i in range(len(path)-1):
         print(f"[{path[i].state.get_state_str()}]", end=", ")
     print(path[-1].state.state_str)
 
 
 def search(start_state, heuristic):
-
+    """
+    Standard A* search implementation.
+    """
     open_set = create_open_set()
     closed_set = create_closed_set()
     start_node = search_node(start_state, 0, heuristic(start_state))
@@ -54,6 +87,7 @@ def search(start_state, heuristic):
 
         current = get_best(open_set)
 
+        # Goal test
         if color_blocks_state.is_goal_state(current.state):
             path = []
             while current:
@@ -64,13 +98,12 @@ def search(start_state, heuristic):
 
         add_to_closed(current, closed_set)
 
-        for neighbor, edge_cost in current.get_neighbors():
-            curr_neighbor = search_node(neighbor, current.g + edge_cost, heuristic(neighbor), current)
-            if not duplicate_in_open(curr_neighbor, open_set) and not duplicate_in_closed(curr_neighbor, closed_set):
-                add_to_open(curr_neighbor, open_set)
+        # Expand neighbors
+        for neighbor, cost in current.get_neighbors():
+            new_node = search_node(neighbor, current.g + cost, heuristic(neighbor), current)
 
-    return None
+            # Skip if duplicate with better/equal path
+            if not duplicate_in_open(new_node, open_set) and not duplicate_in_closed(new_node, closed_set):
+                add_to_open(new_node, open_set)
 
-
-
-
+    return None  # no solution
