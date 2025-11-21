@@ -66,22 +66,26 @@ def base_heuristic(_color_blocks_state):
 def advanced_heuristic(_color_blocks_state):
     """
     Advanced heuristic:
-    1) Start with the base heuristic (adjacency matching)
-    2) Add: small bonus from the top - if the top visible color is wrong -> +1
+    1) base heuristic
+    2) Bottom:
+       - Start at the bottom; if the block contains the goal visible color (either side) -> +0 and move up.
+       - Stop at the first block that lacks its goal color and add +1.
 
-    The top check is conservative (only the first block) to stay admissible
-    while still nudging the search toward aligning the tower from the top.
     """
 
     blocks = _color_blocks_state.blocks
 
-    # base adjacency heuristic 
+    # base adjacency heuristic
     h = base_heuristic(_color_blocks_state)
 
-    #   bottom   
+    # bottom-up alignment hint
     if goal_visible_heuristics and blocks:
-        bottom_visible = blocks[-1][0]
-        if bottom_visible != goal_visible_heuristics[-1]:
-            h += 1
+        limit = min(len(blocks), len(goal_visible_heuristics))
+        for i in range(limit):
+            block = blocks[-1 - i]
+            goal_color = goal_visible_heuristics[-1 - i]
+            if goal_color not in block:
+                h += 1
+                break
 
     return h
