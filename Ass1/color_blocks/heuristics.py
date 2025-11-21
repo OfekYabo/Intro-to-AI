@@ -65,40 +65,42 @@ def base_heuristic(_color_blocks_state):
 
 def advanced_heuristic(_color_blocks_state):
     """
-    Improved admissible heuristic:
+    Advanced heuristic:
+    1) Start with the base heuristic (adjacency matching)
+    2) Add: for each block from top to bottom:
+           if visible color != goal visible color at this position -> +1
+           else -> +0
 
-    For each goal position i, find the block that CONTAINS the required visible color.
-    Then:
-      - If the block is not currently in position i -> add 1
-      - If the block is not currently showing that color -> add 1
-
-    This never overestimates:
-      - Moving a block to its correct position costs >= 1 flip
-      - Fixing its face orientation costs >= 1 spin
+    This is admissible because every mismatch requires at least one operation.
     """
 
     h = 0
     blocks = _color_blocks_state.blocks
-
-    # global list from init_goal_for_heuristics()
     global goal_visible
 
-    for goal_index, required_color in enumerate(goal_visible):
+    # ---- PART 1: base adjacency heuristic ----
+    n = len(blocks)
 
-        # find the block that contains the required_color
-        block_index = None
-        for i, (a, b) in enumerate(blocks):
-            if a == required_color or b == required_color:
-                block_index = i
+    for i in range(n - 1):
+        c1 = blocks[i]
+        c2 = blocks[i + 1]
+        ok = False
+        for col1 in c1:
+            for col2 in c2:
+                pair = tuple(sorted((col1, col2)))
+                if pair in goal_adjacent_color_pairs:
+                    ok = True
+                    break
+            if ok:
                 break
-
-        # Position mismatch
-        if block_index != goal_index:
+        if not ok:
             h += 1
 
-        # Orientation mismatch
-        # To show required_color, it must be the visible one: blocks[i][0]
-        if blocks[block_index][0] != required_color:
+    # ---- PART 2: top-down visible color check ----
+    for i in range(len(goal_visible)):
+        visible_color = blocks[i][0]
+        if visible_color != goal_visible[i]:
             h += 1
 
     return h
+
