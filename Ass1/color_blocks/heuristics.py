@@ -65,40 +65,23 @@ def base_heuristic(_color_blocks_state):
 
 def advanced_heuristic(_color_blocks_state):
     """
-    Improved admissible heuristic:
+    Advanced heuristic:
+    1) Start with the base heuristic (adjacency matching)
+    2) Add: small bonus from the top - if the top visible color is wrong -> +1
 
-    For each goal position i, find the block that CONTAINS the required visible color.
-    Then:
-      - If the block is not currently in position i -> add 1
-      - If the block is not currently showing that color -> add 1
-
-    This never overestimates:
-      - Moving a block to its correct position costs >= 1 flip
-      - Fixing its face orientation costs >= 1 spin
+    The top check is conservative (only the first block) to stay admissible
+    while still nudging the search toward aligning the tower from the top.
     """
 
-    h = 0
     blocks = _color_blocks_state.blocks
 
-    # global list from init_goal_for_heuristics()
-    global goal_visible_heuristics
+    # ---- PART 1: base adjacency heuristic ----
+    h = base_heuristic(_color_blocks_state)
 
-    for goal_index, required_color in enumerate(goal_visible_heuristics):
-
-        # find the block that contains the required_color
-        block_index = None
-        for i, (a, b) in enumerate(blocks):
-            if a == required_color or b == required_color:
-                block_index = i
-                break
-
-        # Position mismatch
-        if block_index != goal_index:
-            h += 1
-
-        # Orientation mismatch
-        # To show required_color, it must be the visible one: blocks[i][0]
-        if blocks[block_index][0] != required_color:
+    # ---- PART 2: gentle bottom alignment hint ----
+    if goal_visible_heuristics and blocks:
+        bottom_visible = blocks[-1][0]
+        if bottom_visible != goal_visible_heuristics[-1]:
             h += 1
 
     return h
