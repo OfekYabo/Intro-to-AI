@@ -75,10 +75,10 @@ def advanced_heuristic(_color_blocks_state):
 
     blocks = _color_blocks_state.blocks
 
-    # ---- PART 1: base adjacency heuristic ----
+    # base adjacency heuristic 
     h = base_heuristic(_color_blocks_state)
 
-    # ---- PART 2: gentle bottom alignment hint ----
+    #   bottom   
     if goal_visible_heuristics and blocks:
         bottom_visible = blocks[-1][0]
         if bottom_visible != goal_visible_heuristics[-1]:
