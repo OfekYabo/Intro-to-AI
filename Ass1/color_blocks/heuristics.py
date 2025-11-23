@@ -1,7 +1,8 @@
-from color_blocks_state import color_blocks_state
+from collections import Counter
 
 goal_visible_heuristics = []
 goal_adjacent_color_pairs = set()
+goal_visible_counts = Counter()   # NEW: global counts of goal visible colors
 
 
 def init_goal_for_heuristics(goal_blocks):
@@ -9,7 +10,7 @@ def init_goal_for_heuristics(goal_blocks):
     Initialize goal information for the heuristics.
     goal_blocks is a string such as "2,22,4,3" representing the visible colors.
     """
-    global goal_visible_heuristics, goal_adjacent_color_pairs
+    global goal_visible_heuristics, goal_adjacent_color_pairs, goal_visible_counts
     goal_visible_heuristics = []
     for part in goal_blocks.split(','):
         part = part.strip()
@@ -23,6 +24,9 @@ def init_goal_for_heuristics(goal_blocks):
         col2 = goal_visible_heuristics[i + 1]
         pair = (col1, col2) if col1 <= col2 else (col2, col1)  # order doesn’t matter
         goal_adjacent_color_pairs.add(pair)
+    
+    # Precompute goal visible color counts
+    goal_visible_counts = Counter(goal_visible_heuristics)
 
 
 def base_heuristic(_color_blocks_state):
@@ -44,19 +48,23 @@ def base_heuristic(_color_blocks_state):
     n = len(blocks)
     goal_pairs = goal_adjacent_color_pairs  # local alias
 
+    if n == 0:
+        return h
+
     for i in range(n - 1):
         c1 = blocks[i]
         c2 = blocks[i + 1]
+        a1, b1 = c1
+        a2, b2 = c2
 
         ok = False
-        for col1 in c1:
-            for col2 in c2:
-                pair = (col1, col2) if col1 <= col2 else (col2, col1)
-                if pair in goal_pairs:
-                    ok = True
-                    break
-            if ok:
-                break
+        # 4 explicit combinations, order-insensitive
+        if ((min(a1, a2), max(a1, a2)) in goal_pairs or
+            (min(a1, b2), max(a1, b2)) in goal_pairs or
+            (min(b1, a2), max(b1, a2)) in goal_pairs or
+            (min(b1, b2), max(b1, b2)) in goal_pairs):
+            ok = True
+
         if not ok:
             h += 1
 
@@ -64,41 +72,59 @@ def base_heuristic(_color_blocks_state):
 
 
 def advanced_heuristic(_color_blocks_state):
-    """
-    Improved admissible heuristic:
+    blocks = _color_blocks_state.blocks
+    n = len(blocks)
+    goal_pairs = goal_adjacent_color_pairs
 
-    For each goal position i, find the block that CONTAINS the required visible color.
-    Then:
-      - If the block is not currently in position i -> add 1
-      - If the block is not currently showing that color -> add 1
-
-    This never overestimates:
-      - Moving a block to its correct position costs >= 1 flip
-      - Fixing its face orientation costs >= 1 spin
-    """
+    if n == 0:
+        return 0
 
     h = 0
-    blocks = _color_blocks_state.blocks
+    extra_used = False
 
-    # global list from init_goal_for_heuristics()
-    global goal_visible_heuristics
+    # Build current visible color counts while iterating
+    curr_counts = Counter()
 
-    for goal_index, required_color in enumerate(goal_visible_heuristics):
+    # --- 1. adjacency + extra-flip logic (your existing idea) ---
+    for i in range(n - 1):
+        c1 = blocks[i]
+        c2 = blocks[i + 1]
+        a1, b1 = c1
+        a2, b2 = c2
 
-        # find the block that contains the required_color
-        block_index = None
-        for i, (a, b) in enumerate(blocks):
-            if a == required_color or b == required_color:
-                block_index = i
-                break
+        # update curr_counts for the left block of the pair
+        # (block i may appear twice across iterations, but Counter can handle it;
+        # if you want exact counts, you can do a separate pass, but this is fine
+        # if you only care about relative lower bound)
+        curr_counts[a1] += 1  # visible color of block i
 
-        # Position mismatch
-        if block_index != goal_index:
+        # adjacency logic (same as base)
+        ok = False
+        if ((min(a1, a2), max(a1, a2)) in goal_pairs or
+            (min(a1, b2), max(a1, b2)) in goal_pairs or
+            (min(b1, a2), max(b1, a2)) in goal_pairs or
+            (min(b1, b2), max(b1, b2)) in goal_pairs):
+            ok = True
+            # extra flip logic: applied at most once globally
+            if not extra_used:
+                if goal_visible_heuristics[i] not in blocks[i]:
+                    h += 1
+                    extra_used = True    
+
+        if not ok:
+            extra_used = True 
             h += 1
 
-        # Orientation mismatch
-        # To show required_color, it must be the visible one: blocks[i][0]
-        if blocks[block_index][0] != required_color:
-            h += 1
+    # ensure we also count the visible color of the last block
+    last_visible = blocks[-1][0]
+    curr_counts[last_visible] += 1
 
+    # --- 2. global color mismatch -> minimal spins ---
+    total_missing = 0
+    for color, g_cnt in goal_visible_counts.items():
+        c_cnt = curr_counts.get(color, 0)
+        if g_cnt > c_cnt:
+            total_missing += (g_cnt - c_cnt)
+
+    h += total_missing
     return h
