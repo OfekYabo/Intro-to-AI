@@ -54,26 +54,14 @@ def add_to_closed(vn, closed_set):
 
 
 def duplicate_in_open(vn, open_set):
-    """
-    Use the dict part of OPEN for O(1) duplicate checks.
-
-    - If there is NO node in OPEN with this state -> return False.
-    - If existing node has g <= vn.g -> return True (vn is worse or equal).
-    - If existing node has g > vn.g -> replace it in dict and let caller add vn to heap.
-    """
-    open_heap, open_dict = open_set
+    _, open_dict = open_set
     existing = open_dict.get(vn.state)
     if existing is None:
         return False
-
     if existing.g <= vn.g:
-        # existing path is better or equal -> ignore vn
         return True
-    else:
-        # new path is better -> update dict
-        open_dict[vn.state] = vn
-        # caller will push vn to heap via add_to_open
-        return False
+    open_dict[vn.state] = vn
+    return False
 
 
 def duplicate_in_closed(vn, closed_set):
@@ -105,7 +93,9 @@ def search(start_state, heuristic):
     open_set = create_open_set()
     closed_set = create_closed_set()
 
-    start_node = search_node(start_state, 0, heuristic(start_state))
+    # Create start node without h, then compute h once and cache it
+    start_node = search_node(start_state, 0, h=None)
+    start_node.h = heuristic(start_state)
     add_to_open(start_node, open_set)
 
     while open_not_empty(open_set):
@@ -128,13 +118,17 @@ def search(start_state, heuristic):
         # Expand neighbors
         for neighbor, cost in current.get_neighbors():
             new_g = current.g + cost
-            new_node = search_node(neighbor, new_g, heuristic(neighbor), current)
+            # Create node without computing h yet
+            new_node = search_node(neighbor, new_g, h=None, prev=current)
 
             # Skip if duplicate with better/equal path
             if duplicate_in_open(new_node, open_set):
                 continue
             if duplicate_in_closed(new_node, closed_set):
                 continue
+
+            # Only now compute heuristic (node will be kept)
+            new_node.h = heuristic(neighbor)
 
             add_to_open(new_node, open_set)
 

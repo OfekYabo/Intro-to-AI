@@ -2,7 +2,7 @@ from collections import Counter
 
 goal_visible_heuristics = []
 goal_adjacent_color_pairs = set()
-goal_visible_counts = Counter()   # NEW: global counts of goal visible colors
+goal_visible_counts = Counter()   # counts of goal visible colors
 
 
 def init_goal_for_heuristics(goal_blocks):
@@ -29,6 +29,13 @@ def init_goal_for_heuristics(goal_blocks):
     goal_visible_counts = Counter(goal_visible_heuristics)
 
 
+def _norm_pair(x, y):
+    """Return ordered pair (min,max) without calling min()/max() twice."""
+    if x <= y:
+        return (x, y)
+    return (y, x)
+
+
 def base_heuristic(_color_blocks_state):
     """
     For each adjacent pair of blocks in the current state:
@@ -43,29 +50,25 @@ def base_heuristic(_color_blocks_state):
 
     Sum the cost over all adjacent block pairs.
     """
-    h = 0
     blocks = _color_blocks_state.blocks
     n = len(blocks)
-    goal_pairs = goal_adjacent_color_pairs  # local alias
-
     if n == 0:
-        return h
+        return 0
+
+    goal_pairs = goal_adjacent_color_pairs  # local alias
+    h = 0
 
     for i in range(n - 1):
-        c1 = blocks[i]
-        c2 = blocks[i + 1]
-        a1, b1 = c1
-        a2, b2 = c2
+        a1, b1 = blocks[i]
+        a2, b2 = blocks[i + 1]
 
-        ok = False
-        # 4 explicit combinations, order-insensitive
-        if ((min(a1, a2), max(a1, a2)) in goal_pairs or
-            (min(a1, b2), max(a1, b2)) in goal_pairs or
-            (min(b1, a2), max(b1, a2)) in goal_pairs or
-            (min(b1, b2), max(b1, b2)) in goal_pairs):
-            ok = True
+        # 4 explicit combinations, order-insensitive, using _norm_pair
+        p1 = _norm_pair(a1, a2)
+        p2 = _norm_pair(a1, b2)
+        p3 = _norm_pair(b1, a2)
+        p4 = _norm_pair(b1, b2)
 
-        if not ok:
+        if not (p1 in goal_pairs or p2 in goal_pairs or p3 in goal_pairs or p4 in goal_pairs):
             h += 1
 
     return h
@@ -74,54 +77,46 @@ def base_heuristic(_color_blocks_state):
 def advanced_heuristic(_color_blocks_state):
     blocks = _color_blocks_state.blocks
     n = len(blocks)
-    goal_pairs = goal_adjacent_color_pairs
-
     if n == 0:
         return 0
 
+    goal_pairs = goal_adjacent_color_pairs
+    goal_vis = goal_visible_heuristics
+    goal_counts = goal_visible_counts
+
+    # --- 0. build current visible color counts in one pass ---
+    curr_counts = Counter(a for (a, b) in blocks)
+
     h = 0
-    extra_used = False
+    extra_flip = False
 
-    # Build current visible color counts while iterating
-    curr_counts = Counter()
-
-    # --- 1. adjacency + extra-flip logic (your existing idea) ---
+    # --- 1. adjacency + extra-flip logic (your idea) ---
     for i in range(n - 1):
-        c1 = blocks[i]
-        c2 = blocks[i + 1]
-        a1, b1 = c1
-        a2, b2 = c2
+        a1, b1 = blocks[i]
+        a2, b2 = blocks[i + 1]
 
-        # update curr_counts for the left block of the pair
-        # (block i may appear twice across iterations, but Counter can handle it;
-        # if you want exact counts, you can do a separate pass, but this is fine
-        # if you only care about relative lower bound)
-        curr_counts[a1] += 1  # visible color of block i
-
-        # adjacency logic (same as base)
+        # adjacency logic (same as base but using _norm_pair)
         ok = False
-        if ((min(a1, a2), max(a1, a2)) in goal_pairs or
-            (min(a1, b2), max(a1, b2)) in goal_pairs or
-            (min(b1, a2), max(b1, a2)) in goal_pairs or
-            (min(b1, b2), max(b1, b2)) in goal_pairs):
+        p1 = _norm_pair(a1, a2)
+        p2 = _norm_pair(a1, b2)
+        p3 = _norm_pair(b1, a2)
+        p4 = _norm_pair(b1, b2)
+        if (p1 in goal_pairs or p2 in goal_pairs or p3 in goal_pairs or p4 in goal_pairs):
             ok = True
             # extra flip logic: applied at most once globally
-            if not extra_used:
-                if goal_visible_heuristics[i] not in blocks[i]:
+            if not extra_flip:
+                required = goal_vis[i]
+                if required != a1 and required != b1:
                     h += 1
-                    extra_used = True    
+                    extra_flip = True
 
         if not ok:
-            extra_used = True 
             h += 1
+            extra_flip = True
 
-    # ensure we also count the visible color of the last block
-    last_visible = blocks[-1][0]
-    curr_counts[last_visible] += 1
-
-    # --- 2. global color mismatch -> minimal spins ---
+    # --- 2. global color mismatch minimal spins ---
     total_missing = 0
-    for color, g_cnt in goal_visible_counts.items():
+    for color, g_cnt in goal_counts.items():
         c_cnt = curr_counts.get(color, 0)
         if g_cnt > c_cnt:
             total_missing += (g_cnt - c_cnt)
